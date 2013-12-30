@@ -91,6 +91,7 @@ class SyncEventHandler(watchdog.events.FileSystemEventHandler):
 
     def on_created(self, event):
         if self.isExcluded(event.src_path):
+            logging.info("created: excluded: %s" % event.src_path)
             return
         target = self.get_target(event.src_path)
         if event.is_directory:
@@ -100,21 +101,37 @@ class SyncEventHandler(watchdog.events.FileSystemEventHandler):
 
     def on_deleted(self, event):
         if self.isExcluded(event.src_path):
+            logging.info("deleted: excluded: %s" % event.src_path)
             return
         target = self.get_target(event.src_path)
         self.queue.put(("rm", "-rv", target))
 
     def on_modified(self, event):
         if self.isExcluded(event.src_path):
+            logging.info("modified: excluded: %s" % event.src_path)
             return
         target = self.get_target(event.src_path)
         if event.is_directory:
-            self.queue.put(("touch", target))
+            #directory modified on OSX may mean that a file got changed in the dir :(
+            cmd = ["rsync", "-rpcv", "--exclude",  "/*/*", "--del", "--delete-excluded", self.src + "/", target]
+            for fn in EXCLUDE:
+                cmd += ["--exclude", fn]
+            self.queue.put(cmd)
         else:
             self.on_created(event)
 
     def on_moved(self, event):
+        if self.isExcluded(event.src_path) and self.isExcluded(event.dest_path):
+            logging.info("move: excluded from all: %s" % event.src_path)
+            return
+        if self.isExluded(event.dest_path):
+            logging.info("move: excluded from dest_path: %s, so remove event" % event.src_path)
+            self.on_deleted(event)
+            return
         if self.isExcluded(event.src_path):
+            logging.info("move: excluded from src_path, so create event: %s" % event.dest_path)
+            event.src_path = event.dest_path
+            self.on_created(event)
             return
         target_src = self.get_target(event.src_path)
         target_dst = self.get_target(event.dest_path)
