@@ -11,7 +11,8 @@ import Queue
 import os.path
 import fnmatch
 
-EXCLUDE = (".git", ".*.swp")  # list of file and directory names to exclude
+# list of globs of file and directory names to exclude
+EXCLUDE = (".git", ".*.swp", ".virtualenv")
 
 
 class SyncEventHandler(watchdog.events.FileSystemEventHandler):
@@ -49,8 +50,7 @@ class SyncEventHandler(watchdog.events.FileSystemEventHandler):
     def initialSync(self):
         self.emptyQueue()
         logging.info("Constructed, copying....")
-        cmd = ["rsync", "-rpcv", "--del", "--delete-excluded",
-               self.src + "/", self.dst]
+        cmd = ["rsync", "-rpcv", "--del", self.src + "/", self.dst]
         for fn in EXCLUDE:
             cmd += ["--exclude", fn]
         result = subprocess.call(cmd)
